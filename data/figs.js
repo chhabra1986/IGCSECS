@@ -59,11 +59,67 @@ function dedent(s){s=String(s).replace(/^\n+/,"").replace(/\s+$/,"");const L=s.s
 // pseudocode block; use <- for the assignment arrow, it is shown as ←
 function C(x,numbered){let t=dedent(x).replace(/<-/g,"←");if(numbered)t=t.split("\n").map((l,i)=>String(i+1).padStart(2,"0")+"  "+l).join("\n");return`<pre class="code">${escCode(t)}</pre>`}
 function I(x){return`<code class="i">${escCode(String(x).replace(/<-/g,"←"))}</code>`}
-/* ---------- flowchart (vertical list of numbered boxes) ---------- */
-function FC(title,nodes){
-  const shape={t:"border-radius:999px",p:"border-radius:3px",io:"border-radius:3px;transform:skewX(-12deg)",d:"border-radius:3px;border-style:double;border-width:3px"};
-  return`<div class="flowbox"><div class="flowt">${title}</div>${nodes.map((n,i)=>`<div class="fnode"><span class="fn">${i+1}</span><span class="fs" style="${shape[n[0]]}"><span style="${n[0]==="io"?"display:inline-block;transform:skewX(12deg)":""}">${escCode(n[1].replace(/<-/g,"←"))}</span></span>${n[2]?`<span class="fb">${escCode(n[2])}</span>`:i<nodes.length-1&&n[0]!=="t"||i===0?`<span class="fb">↓</span>`:""}</div>`).join("")}<div class="flowk">Shapes: rounded = start/end · rectangle = process · slanted = input/output · double border = decision. Arrows show the next step.</div></div>`;
+/* ---------- flowcharts (proper SVG: terminator, process, input/output, decision, arrows) ----------
+   nodes: [{id, k:"t"|"p"|"io"|"d", x:"text|second line", next:id, yes:id, no:id, side:true}]
+   Nodes are stacked in a main column in array order; side:true puts a node to the right of the
+   node before it (used for a decision's side branch). Back edges loop round on the left,
+   forward skips run down on the right. */
+function FLOW(cap,nodes,alt){
+  const FS=12.5,CW=7.1,LH=16,GAP=30,byId={};nodes.forEach(n=>byId[n.id]=n);
+  const lines=n=>String(n.x).replace(/<-/g,"←").split("|");
+  nodes.forEach(n=>{const L=lines(n),tw=Math.max(...L.map(l=>l.length))*CW;
+    if(n.k==="d"){n.w=Math.max(130,tw*1.25+56);n.h=Math.max(62,L.length*LH+40)}
+    else{n.w=Math.max(n.k==="t"?96:120,tw+(n.k==="io"?44:26));n.h=Math.max(34,L.length*LH+14)}});
+  // rows
+  let row=-1;nodes.forEach((n,i)=>{if(n.side&&i>0){n.row=nodes[i-1].row;n.col=1}else{n.row=++row;n.col=0}});
+  const nrows=row+1,rowH=[];nodes.forEach(n=>{rowH[n.row]=Math.max(rowH[n.row]||0,n.h)});
+  const rowY=[];let y=14;for(let r=0;r<nrows;r++){rowY[r]=y+rowH[r]/2;y+=rowH[r]+GAP}
+  const H=y-GAP+14;
+  const edgesOut=n=>n.k==="d"?[["Yes",n.yes],["No",n.no]]:(n.next?[["",n.next]]:[]);
+  // lanes
+  let backs=0,fwds=0;nodes.forEach(n=>edgesOut(n).forEach(([l,t])=>{const T=byId[t];if(!T)return;
+    if(n.col===0&&T.col===0){if(T.row<n.row)n["lane_"+t]=-(++backs);else if(T.row>n.row+1)n["lane_"+t]=++fwds}}));
+  const w0=Math.max(...nodes.filter(n=>n.col===0).map(n=>n.w)),w1=Math.max(0,...nodes.filter(n=>n.col===1).map(n=>n.w));
+  const LANE=16,left=24+backs*LANE,x0=left+w0/2,x1=x0+w0/2+48+w1/2,rightEdge=(w1?x1+w1/2:x0+w0/2);
+  const W=rightEdge+20+fwds*LANE+14;
+  nodes.forEach(n=>{n.cx=n.col?x1:x0;n.cy=rowY[n.row]});
+  let b="";const T=(x,y,t,ex)=>TX(x,y,escCode(t).replace(/←/g,'<tspan font-size="17" dy="1">←</tspan><tspan dy="-1"></tspan>'),"middle",`font-size="${FS}"`+(ex?" "+ex:""));
+  const LBL=(x,y,t,a)=>t?TX(x,y,t,a||"start",'font-size="11.5" font-weight="700"'):"";
+  // shapes
+  nodes.forEach(n=>{const{cx,cy,w,h}=n,l=cx-w/2,t=cy-h/2;
+    if(n.k==="t")b+=`<rect x="${l}" y="${t}" width="${w}" height="${h}" rx="${h/2}"/>`;
+    else if(n.k==="p")b+=`<rect x="${l}" y="${t}" width="${w}" height="${h}"/>`;
+    else if(n.k==="io"){const s=12;b+=`<path d="M${l+s},${t} H${l+w} L${l+w-s},${t+h} H${l} Z"/>`}
+    else b+=`<path d="M${cx},${t} L${l+w},${cy} L${cx},${t+h} L${l},${cy} Z"/>`;
+    const L=lines(n);L.forEach((s,k)=>{b+=T(cx,cy+4.5+(k-(L.length-1)/2)*LH,s,n.k==="t"?'font-weight="700"':"")});});
+  // edges
+  const pts=(arr)=>`<polyline points="${arr.map(p=>p.join(",")).join(" ")}" fill="none"/>`;
+  const path=(arr)=>{const a=arr.slice(0,-1),z=arr[arr.length-2],e=arr[arr.length-1];return(a.length>1?pts(a):"")+ARW(z[0],z[1],e[0],e[1],7)};
+  nodes.forEach(n=>{const outs=edgesOut(n);
+    // which decision branch goes down: the one whose target is the next main-column row
+    outs.forEach(([lab,tid])=>{const t=byId[tid];if(!t)return;
+      const bot=[n.cx,n.cy+n.h/2],lft=[n.cx-n.w/2,n.cy],rgt=[n.cx+n.w/2,n.cy];
+      if(n.col===0&&t.col===0&&t.row===n.row+1){ // straight down
+        b+=path([bot,[t.cx,t.cy-t.h/2]])+LBL(n.cx+6,bot[1]+13,lab);
+      }else if(n.col===0&&t.col===1&&t.row===n.row){ // across to side node
+        b+=path([rgt,[t.cx-t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab);
+      }else if(n.col===0&&t.col===0&&t.row<n.row){ // loop back on the left
+        const X=24+(backs+n["lane_"+tid])*LANE;
+        b+=path([lft,[X,lft[1]],[X,t.cy],[t.cx-t.w/2,t.cy]])+LBL((X+lft[0])/2,lft[1]-6,lab,"middle");
+      }else if(n.col===0&&t.col===0){ // forward skip on the right
+        const X=rightEdge+20+(n["lane_"+tid]-1)*LANE;
+        b+=path([rgt,[X,rgt[1]],[X,t.cy],[t.cx+t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab);
+      }else if(n.col===1&&t.col===0&&t.row>n.row){ // side node rejoins below
+        b+=path([bot,[n.cx,t.cy],[t.cx+t.w/2,t.cy]])+LBL(n.cx+6,bot[1]+13,lab);
+      }else if(n.col===1&&t.col===0){ // side node loops back up
+        const top=[n.cx,n.cy-n.h/2];b+=path([top,[n.cx,t.cy],[t.cx+t.w/2,t.cy]]);
+      }});});
+  const desc=alt||nodes.map((n,i)=>{const nm={t:"terminator",p:"process",io:"input/output",d:"decision"}[n.k];const ix=id=>nodes.indexOf(byId[id])+1;
+    const go=n.k==="d"?` (Yes → box ${ix(n.yes)}, No → box ${ix(n.no)})`:n.next?` → box ${ix(n.next)}`:"";return`Box ${i+1} [${nm}] ${String(n.x).replace(/\|/g," ").replace(/<-/g,"←")}${go}`}).join("; ");
+  return FIG(cap,SV(Math.ceil(W),Math.ceil(H),b),`Flowchart: ${desc}`);
 }
+// keep old name working
+function FC(title,nodes){return FLOW(title,nodes)}
 /* ---------- logic gates ----------
    Circuit tree: "A" (input) or {g:"AND"|"OR"|"NOT"|"NAND"|"NOR"|"XOR", i:[...]} */
 function LEVAL(n,env){if(typeof n==="string")return env[n];const v=n.i.map(x=>LEVAL(x,env));

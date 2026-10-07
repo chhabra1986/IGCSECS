@@ -122,10 +122,33 @@ NEXT Count`),parts:[
  {q:"Describe what happens during the analysis stage.",m:2,ms:["The problem is identified and decomposed/abstraction is used","requirements of the system are identified/specified"]},
  {q:"Decompose the canteen system into its inputs, processes, outputs and storage, giving one example of each.",m:4,ms:["Input: student ID/menu choice/payment details","process: calculate total cost/check balance","output: order confirmation/receipt","storage: student accounts/menu/orders"]},
  {q:"Identify two methods of designing a solution.",m:2,ms:["Structure diagrams","flowcharts","pseudocode"],note:"[1] per method up to [2]."}]},
-{id:"flow-max",t:["7"],title:"Flowcharts",stem:FC("Flowchart",[["t","START"],["p","Count <- 0, Total <- 0"],["io","INPUT Mark"],["d","Is Mark = -1?","Yes → 8, No → 5"],["p","Total <- Total + Mark"],["p","Count <- Count + 1"],["p","Go back to 3"],["io","OUTPUT Total / Count"],["t","STOP"]]),parts:[
+{id:"flow-max",t:["7"],title:"Flowcharts",stem:"<p>The flowchart below calculates the average of a set of marks.</p>"+FLOW("Flowchart A",[
+  {id:"s",k:"t",x:"START",next:"i"},{id:"i",k:"p",x:"Count <- 0|Total <- 0",next:"in"},{id:"in",k:"io",x:"INPUT Mark",next:"d"},
+  {id:"d",k:"d",x:"Is Mark = -1?",yes:"o",no:"t"},{id:"t",k:"p",x:"Total <- Total + Mark",next:"c"},{id:"c",k:"p",x:"Count <- Count + 1",next:"in"},
+  {id:"o",k:"io",x:"OUTPUT Total / Count",next:"e"},{id:"e",k:"t",x:"STOP"}]),parts:[
  {q:"State the output if the marks entered are 60, 75, 90, −1.",m:2,ms:["(60 + 75 + 90) ÷ 3","= 75"]},
  {q:"Explain the purpose of −1 in this flowchart.",m:2,ms:["It is a rogue/sentinel value that ends the input","it is not included in the total or count"]},
- {q:"Write pseudocode equivalent to the flowchart, using a WHILE loop.",m:4,ms:["Count <- 0, Total <- 0, INPUT Mark","WHILE Mark <> -1 DO","Total <- Total + Mark; Count <- Count + 1; INPUT Mark","ENDWHILE; OUTPUT Total / Count"]}]}
+ {q:"Identify the problem that occurs if the first mark entered is −1, and describe how the flowchart could be changed to prevent it.",m:2,ms:["Division by zero (Count is 0)","add a decision before the output to check Count > 0 / output a message instead"]},
+ {q:"Write pseudocode equivalent to the flowchart, using a WHILE loop.",m:4,ms:["Count <- 0, Total <- 0, INPUT Mark","WHILE Mark <> -1 DO","Total <- Total + Mark; Count <- Count + 1; INPUT Mark","ENDWHILE; OUTPUT Total / Count"]}]},
+{id:"flow-largest",t:["7"],title:"Flowcharts and trace tables",stem:"<p>The flowchart below processes five numbers.</p>"+FLOW("Flowchart B",[
+  {id:"s",k:"t",x:"START",next:"in1"},{id:"in1",k:"io",x:"INPUT Num",next:"l1"},{id:"l1",k:"p",x:"Largest <- Num",next:"c1"},{id:"c1",k:"p",x:"Count <- 1",next:"d1"},
+  {id:"d1",k:"d",x:"Is Count < 5?",yes:"in2",no:"o"},{id:"in2",k:"io",x:"INPUT Num",next:"d2"},
+  {id:"d2",k:"d",x:"Is Num > Largest?",yes:"l2",no:"c2"},{id:"l2",k:"p",x:"Largest <- Num",next:"c2",side:true},
+  {id:"c2",k:"p",x:"Count <- Count + 1",next:"d1"},{id:"o",k:"io",x:"OUTPUT Largest",next:"e"},{id:"e",k:"t",x:"STOP"}]),parts:[
+ {q:"Complete a trace table (columns Num, Largest, Count, OUTPUT) for the input data 12, 7, 19, 3, 15.",m:4,ms:["Num: 12, 7, 19, 3, 15","Largest: 12, 19 (changes only when 19 is input)","Count: 1, 2, 3, 4, 5","OUTPUT: 19"]},
+ {q:"State the purpose of the flowchart.",m:1,ms:["To find and output the largest of five numbers input"]},
+ {q:"Describe the changes needed so that the flowchart outputs the smallest number instead.",m:2,ms:["Change the decision to Is Num < Largest? / Num < Smallest","rename the variable Largest to Smallest (and output Smallest)"]},
+ {q:"Write pseudocode equivalent to the flowchart, using a FOR loop.",m:4,ms:["INPUT Num; Largest <- Num","FOR Count <- 2 TO 5 (four more inputs) with INPUT Num inside","IF Num > Largest THEN Largest <- Num ENDIF","NEXT Count; OUTPUT Largest (after the loop)"]}]},
+{id:"flow-valid",t:["7"],title:"Flowcharts with validation",stem:"<p>The flowchart below is used to enter test scores for a class of 30 pupils.</p>"+FLOW("Flowchart C",[
+  {id:"s",k:"t",x:"START",next:"i"},{id:"i",k:"p",x:"Passes <- 0|Pupil <- 1",next:"in"},{id:"in",k:"io",x:"INPUT Score",next:"d1"},
+  {id:"d1",k:"d",x:"Is Score < 0 OR|Score > 100?",yes:"err",no:"d2"},{id:"err",k:"io",x:"OUTPUT \"Invalid, re-enter\"",next:"in",side:true},
+  {id:"d2",k:"d",x:"Is Score >= 50?",yes:"p",no:"u"},{id:"p",k:"p",x:"Passes <- Passes + 1",next:"u",side:true},
+  {id:"u",k:"p",x:"Pupil <- Pupil + 1",next:"d3"},{id:"d3",k:"d",x:"Is Pupil > 30?",yes:"o",no:"in"},
+  {id:"o",k:"io",x:"OUTPUT Passes",next:"e"},{id:"e",k:"t",x:"STOP"}]),parts:[
+ {q:"Identify the type of validation check used in the flowchart.",m:1,ms:["Range check"]},
+ {q:"Give one item of normal, one item of boundary and one item of erroneous test data for Score.",m:3,ms:["Normal: any value 1–99, e.g. 64","Boundary: 0 or 100 (or −1/101 as extreme boundary-invalid)","Erroneous: e.g. −15, 150, \"ten\""]},
+ {q:"Explain the purpose of the variable Passes.",m:2,ms:["It is a counter","counts the number of pupils who scored 50 or more"]},
+ {q:"Write pseudocode equivalent to the flowchart. Use a REPEAT … UNTIL loop for the validation.",m:6,ms:["Passes <- 0 and loop for 30 pupils (FOR Pupil <- 1 TO 30 or equivalent)","REPEAT INPUT Score","IF Score < 0 OR Score > 100 THEN OUTPUT \"Invalid, re-enter\"","UNTIL Score >= 0 AND Score <= 100","IF Score >= 50 THEN Passes <- Passes + 1","OUTPUT Passes after the loop"]}]}
 ];
 
 /* 15-mark scenario questions */
