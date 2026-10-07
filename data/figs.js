@@ -59,65 +59,65 @@ function dedent(s){s=String(s).replace(/^\n+/,"").replace(/\s+$/,"");const L=s.s
 // pseudocode block; use <- for the assignment arrow, it is shown as ←
 function C(x,numbered){let t=dedent(x).replace(/<-/g,"←");if(numbered)t=t.split("\n").map((l,i)=>String(i+1).padStart(2,"0")+"  "+l).join("\n");return`<pre class="code">${escCode(t)}</pre>`}
 function I(x){return`<code class="i">${escCode(String(x).replace(/<-/g,"←"))}</code>`}
-/* ---------- flowcharts (proper SVG: terminator, process, input/output, decision, arrows) ----------
+/* ---------- flowcharts: proper SVG (terminator, process, input/output, decision, arrows) ----------
+   FLOWSVG(nodes, opts) -> {svg, desc}
    nodes: [{id, k:"t"|"p"|"io"|"d", x:"text|second line", next:id, yes:id, no:id, side:true}]
-   Nodes are stacked in a main column in array order; side:true puts a node to the right of the
-   node before it (used for a decision's side branch). Back edges loop round on the left,
-   forward skips run down on the right. */
-function FLOW(cap,nodes,alt){
-  const FS=12.5,CW=7.1,LH=16,GAP=30,byId={};nodes.forEach(n=>byId[n.id]=n);
-  const lines=n=>String(n.x).replace(/<-/g,"←").split("|");
+   Nodes stack in a main column in array order; side:true puts a node to the right of the node before
+   it (a decision's side branch). Back edges loop round on the left, forward skips run down on the right;
+   longer jumps use outer lanes so lines never cross.
+   opts: {labels:["Yes","No"], num:true (show step numbers), arrow:true (show "<-" as ←)} */
+function FLOWSVG(nodes,opts){
+  opts=opts||{};const LB=opts.labels||["Yes","No"];
+  const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const tx=(x,y,t,a,ex)=>`<text x="${x}" y="${y}" text-anchor="${a||"middle"}" fill="currentColor" stroke="none"${ex?" "+ex:""}>${t}</text>`;
+  const arw=(x1,y1,x2,y2)=>{const a=Math.atan2(y2-y1,x2-x1),s=7,p=d=>[x2-s*Math.cos(a+d),y2-s*Math.sin(a+d)],l=p(.45),r=p(-.45);
+    return`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><polygon points="${x2},${y2} ${l[0].toFixed(1)},${l[1].toFixed(1)} ${r[0].toFixed(1)},${r[1].toFixed(1)}" fill="currentColor"/>`};
+  const FS=12.5,CW=7.1,LH=16,GAP=30,LANE=16,byId={};nodes.forEach(n=>byId[n.id]=n);
+  const txt=n=>String(n.x).replace(/<-/g,"←");
+  const lines=n=>txt(n).split(/\||\n/);
   nodes.forEach(n=>{const L=lines(n),tw=Math.max(...L.map(l=>l.length))*CW;
     if(n.k==="d"){n.w=Math.max(130,tw*1.25+56);n.h=Math.max(62,L.length*LH+40)}
     else{n.w=Math.max(n.k==="t"?96:120,tw+(n.k==="io"?44:26));n.h=Math.max(34,L.length*LH+14)}});
-  // rows
   let row=-1;nodes.forEach((n,i)=>{if(n.side&&i>0){n.row=nodes[i-1].row;n.col=1}else{n.row=++row;n.col=0}});
   const nrows=row+1,rowH=[];nodes.forEach(n=>{rowH[n.row]=Math.max(rowH[n.row]||0,n.h)});
   const rowY=[];let y=14;for(let r=0;r<nrows;r++){rowY[r]=y+rowH[r]/2;y+=rowH[r]+GAP}
   const H=y-GAP+14;
-  const edgesOut=n=>n.k==="d"?[["Yes",n.yes],["No",n.no]]:(n.next?[["",n.next]]:[]);
-  // lanes
-  let backs=0,fwds=0;nodes.forEach(n=>edgesOut(n).forEach(([l,t])=>{const T=byId[t];if(!T)return;
-    if(n.col===0&&T.col===0){if(T.row<n.row)n["lane_"+t]=-(++backs);else if(T.row>n.row+1)n["lane_"+t]=++fwds}}));
-  const w0=Math.max(...nodes.filter(n=>n.col===0).map(n=>n.w)),w1=Math.max(0,...nodes.filter(n=>n.col===1).map(n=>n.w));
-  const LANE=16,left=24+backs*LANE,x0=left+w0/2,x1=x0+w0/2+48+w1/2,rightEdge=(w1?x1+w1/2:x0+w0/2);
-  const W=rightEdge+20+fwds*LANE+14;
+  const outs=n=>n.k==="d"?[[LB[0],n.yes],[LB[1],n.no]]:(n.next?[["",n.next]]:[]);
+  // lanes: collect jumps, longest span gets the outermost lane
+  const backs=[],fwds=[];nodes.forEach(n=>outs(n).forEach(([l,t])=>{const T=byId[t];if(!T||n.col||T.col)return;
+    if(T.row<n.row)backs.push({n,t,span:n.row-T.row});else if(T.row>n.row+1)fwds.push({n,t,span:T.row-n.row})}));
+  const lane={};[backs,fwds].forEach(arr=>{arr.sort((a,b)=>a.span-b.span).forEach((e,i)=>lane[e.n.id+">"+e.t]=i)}); // 0 = innermost
+  const w0=Math.max(...nodes.filter(n=>!n.col).map(n=>n.w)),w1=Math.max(0,...nodes.filter(n=>n.col).map(n=>n.w));
+  const left=(opts.num?34:24)+backs.length*LANE,x0=left+w0/2,x1=x0+w0/2+48+w1/2,rightEdge=w1?x1+w1/2:x0+w0/2;
+  const W=rightEdge+20+fwds.length*LANE+14;
   nodes.forEach(n=>{n.cx=n.col?x1:x0;n.cy=rowY[n.row]});
-  let b="";const T=(x,y,t,ex)=>TX(x,y,escCode(t).replace(/←/g,'<tspan font-size="17" dy="1">←</tspan><tspan dy="-1"></tspan>'),"middle",`font-size="${FS}"`+(ex?" "+ex:""));
-  const LBL=(x,y,t,a)=>t?TX(x,y,t,a||"start",'font-size="11.5" font-weight="700"'):"";
-  // shapes
-  nodes.forEach(n=>{const{cx,cy,w,h}=n,l=cx-w/2,t=cy-h/2;
+  let b="";
+  const T=(x,y,t,ex)=>tx(x,y,esc(t).replace(/←/g,'<tspan font-size="17" dy="1">←</tspan><tspan dy="-1"></tspan>'),"middle",`font-size="${FS}"`+(ex?" "+ex:""));
+  const LBL=(x,y,t,a)=>t?tx(x,y,t,a||"start",'font-size="11.5" font-weight="700"'):"";
+  nodes.forEach((n,i)=>{const{cx,cy,w,h}=n,l=cx-w/2,t=cy-h/2;
     if(n.k==="t")b+=`<rect x="${l}" y="${t}" width="${w}" height="${h}" rx="${h/2}"/>`;
     else if(n.k==="p")b+=`<rect x="${l}" y="${t}" width="${w}" height="${h}"/>`;
     else if(n.k==="io"){const s=12;b+=`<path d="M${l+s},${t} H${l+w} L${l+w-s},${t+h} H${l} Z"/>`}
     else b+=`<path d="M${cx},${t} L${l+w},${cy} L${cx},${t+h} L${l},${cy} Z"/>`;
-    const L=lines(n);L.forEach((s,k)=>{b+=T(cx,cy+4.5+(k-(L.length-1)/2)*LH,s,n.k==="t"?'font-weight="700"':"")});});
-  // edges
-  const pts=(arr)=>`<polyline points="${arr.map(p=>p.join(",")).join(" ")}" fill="none"/>`;
-  const path=(arr)=>{const a=arr.slice(0,-1),z=arr[arr.length-2],e=arr[arr.length-1];return(a.length>1?pts(a):"")+ARW(z[0],z[1],e[0],e[1],7)};
-  nodes.forEach(n=>{const outs=edgesOut(n);
-    // which decision branch goes down: the one whose target is the next main-column row
-    outs.forEach(([lab,tid])=>{const t=byId[tid];if(!t)return;
-      const bot=[n.cx,n.cy+n.h/2],lft=[n.cx-n.w/2,n.cy],rgt=[n.cx+n.w/2,n.cy];
-      if(n.col===0&&t.col===0&&t.row===n.row+1){ // straight down
-        b+=path([bot,[t.cx,t.cy-t.h/2]])+LBL(n.cx+6,bot[1]+13,lab);
-      }else if(n.col===0&&t.col===1&&t.row===n.row){ // across to side node
-        b+=path([rgt,[t.cx-t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab);
-      }else if(n.col===0&&t.col===0&&t.row<n.row){ // loop back on the left
-        const X=24+(backs+n["lane_"+tid])*LANE;
-        b+=path([lft,[X,lft[1]],[X,t.cy],[t.cx-t.w/2,t.cy]])+LBL((X+lft[0])/2,lft[1]-6,lab,"middle");
-      }else if(n.col===0&&t.col===0){ // forward skip on the right
-        const X=rightEdge+20+(n["lane_"+tid]-1)*LANE;
-        b+=path([rgt,[X,rgt[1]],[X,t.cy],[t.cx+t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab);
-      }else if(n.col===1&&t.col===0&&t.row>n.row){ // side node rejoins below
-        b+=path([bot,[n.cx,t.cy],[t.cx+t.w/2,t.cy]])+LBL(n.cx+6,bot[1]+13,lab);
-      }else if(n.col===1&&t.col===0){ // side node loops back up
-        const top=[n.cx,n.cy-n.h/2];b+=path([top,[n.cx,t.cy],[t.cx+t.w/2,t.cy]]);
-      }});});
-  const desc=alt||nodes.map((n,i)=>{const nm={t:"terminator",p:"process",io:"input/output",d:"decision"}[n.k];const ix=id=>nodes.indexOf(byId[id])+1;
-    const go=n.k==="d"?` (Yes → box ${ix(n.yes)}, No → box ${ix(n.no)})`:n.next?` → box ${ix(n.next)}`:"";return`Box ${i+1} [${nm}] ${String(n.x).replace(/\|/g," ").replace(/<-/g,"←")}${go}`}).join("; ");
-  return FIG(cap,SV(Math.ceil(W),Math.ceil(H),b),`Flowchart: ${desc}`);
+    const L=lines(n);L.forEach((s,k)=>{b+=T(cx,cy+4.5+(k-(L.length-1)/2)*LH,s,n.k==="t"?'font-weight="700"':"")});
+    if(opts.num)b+=tx(n.k==="d"?cx-w/4-4:l-5,t+(n.k==="d"?h/4:10),i+1,"end",'font-size="10" fill-opacity=".6"');});
+  const poly=a=>`<polyline points="${a.map(p=>p.join(",")).join(" ")}" fill="none"/>`;
+  const path=a=>{const z=a[a.length-2],e=a[a.length-1];return(a.length>2?poly(a.slice(0,-1)):"")+arw(z[0],z[1],e[0],e[1])};
+  nodes.forEach(n=>outs(n).forEach(([lab,tid])=>{const t=byId[tid];if(!t)return;
+    const bot=[n.cx,n.cy+n.h/2],lft=[n.cx-n.w/2,n.cy],rgt=[n.cx+n.w/2,n.cy],k=lane[n.id+">"+tid];
+    if(!n.col&&!t.col&&t.row===n.row+1)b+=path([bot,[t.cx,t.cy-t.h/2]])+LBL(n.cx+6,bot[1]+13,lab);
+    else if(!n.col&&t.col&&t.row===n.row)b+=path([rgt,[t.cx-t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab);
+    else if(!n.col&&!t.col&&t.row<n.row){const X=left-12-k*LANE;b+=path([lft,[X,lft[1]],[X,t.cy],[t.cx-t.w/2,t.cy]])+LBL((X+lft[0])/2,lft[1]-6,lab,"middle")}
+    else if(!n.col&&!t.col){const X=rightEdge+20+k*LANE;b+=path([rgt,[X,rgt[1]],[X,t.cy],[t.cx+t.w/2,t.cy]])+LBL(rgt[0]+6,rgt[1]-6,lab)}
+    else if(n.col&&!t.col&&t.row>n.row)b+=path([bot,[n.cx,t.cy],[t.cx+t.w/2,t.cy]])+LBL(n.cx+6,bot[1]+13,lab);
+    else if(n.col&&!t.col)b+=path([[n.cx,n.cy-n.h/2],[n.cx,t.cy],[t.cx+t.w/2,t.cy]]);}));
+  const kind={t:"terminator",p:"process",io:"input/output",d:"decision"},ix=id=>nodes.indexOf(byId[id])+1;
+  const desc=nodes.map((n,i)=>`Step ${i+1} [${kind[n.k]}] ${lines(n).join("; ")}${n.k==="d"?` (${LB[0]} → step ${ix(n.yes)}, ${LB[1]} → step ${ix(n.no)})`:n.next?` → step ${ix(n.next)}`:""}`).join(". ");
+  const Wc=Math.ceil(W),Hc=Math.ceil(H);
+  const svg=`<svg class="dg flowsvg" viewBox="0 0 ${Wc} ${Hc}" width="${Wc}" height="${Hc}" role="img" xmlns="http://www.w3.org/2000/svg" font-family="Archivo, Arial, sans-serif" font-size="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="max-width:100%;height:auto">${b}</svg>`;
+  return{svg,desc};
 }
+function FLOW(cap,nodes){const r=FLOWSVG(nodes,{});return FIG(cap,r.svg,"Flowchart: "+r.desc)}
 // keep old name working
 function FC(title,nodes){return FLOW(title,nodes)}
 /* ---------- logic gates ----------
