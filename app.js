@@ -106,14 +106,16 @@ function renderItem(it,n,view,print,lines){
     const after=showMS||(view==="i"&&S.checked)?`<div class="ms"><b class="h">Answer ${LET[it.ans]}</b>${it.why}</div>`:"";
     return`<div class="q"><div class="qn">${n}.</div><div class="qbody"><div class="qtext">${it.q} <span class="tag">${it.tags[0]}</span></div><ul class="opts">${lis}</ul>${after}</div></div>`;
   }
-  const parts=it.parts.map((p,i)=>{
+  const partsA=it.parts.map((p,i)=>{
     const first=p.lab.length&&p.lab[0]!==prev;prev=p.lab[0];
     const lbl=p.lab.length?`${first?"("+p.lab[0]+")":""}${p.lab[1]?(first?" ":"&emsp;&nbsp;")+"("+p.lab[1]+")":""}`:"";
     const ms=showMS?msBlock(p):(view==="i"&&!print?`<button class="reveal" data-rv="${n}-${i}">Show markscheme</button><div hidden id="rv-${n}-${i}">${msBlock(p)}</div>`:"");
     const ln=lines&&view!=="m"&&(view==="q"||print)?`<div class="lines" style="--n:${linesFor(p)}"></div>`:"";
-    return`<div class="part"><span class="pl">${lbl}</span><div>${p.q}</div><span class="mk">[${p.m}]</span>${ln}</div>${ms}`}).join("");
+    return`<div class="part"><span class="pl">${lbl}</span><div>${p.q}</div><span class="mk">[${p.m}]</span>${ln}</div>`+"\u0000"+ms});
   const head=it.title||it.tags.length?`<p class="stem"><b>${it.title}</b> <span class="tags">${it.tags.map(t=>`<span class="tag" title="${NAME[t]||""}">${t} ${NAME[t]||""}</span>`).join("")}</span></p>`:"";
-  return`<div class="q${lines?" qa":""}"><div class="qn">${n}.</div><div class="qbody">${head}${it.stem?`<div class="dtwrap">${it.stem}</div>`:""}${parts}${it.parts.length>1?`<div class="mk" style="text-align:right;margin-top:6px">Total [${it.m}]</div>`:""}</div></div>`;
+  const big=it.parts[0]&&linesFor(it.parts[0])>16; // a very long answer space would make the block taller than a page
+  // number + title + stem + first part stay together so a heading is never stranded at the foot of a PDF page
+  return`<div class="q${lines?" qa":""}"><div></div><div class="qbody"><div class="qtop"><div class="qn qnabs">${n}.</div>${head}${it.stem?`<div class="dtwrap">${it.stem}</div>`:""}${big?"":(partsA[0]||"").split("\u0000")[0]}</div>${big?(partsA[0]||"").replace("\u0000",""):(partsA[0]||"").split("\u0000")[1]||""}${partsA.slice(1).map(x=>x.replace("\u0000","")).join("")}${it.parts.length>1?`<div class="mk" style="text-align:right;margin-top:6px">Total [${it.m}]</div>`:""}</div></div>`;
 }
 function bookletHTML(B){
   return`<div class="booklet"><h3>Resource booklet · ${B.title}</h3><p class="small">${B.intro}</p>${B.sec.map(s=>`<div class="src"><h4><span class="sl">Section ${s.n}</span><span>${s.title}</span></h4>${s.figs}</div>`).join("")}</div>`;
@@ -200,7 +202,7 @@ async function savePDF(inner,filename){
     const opt={margin:[12,12,17,12],filename,image:{type:"jpeg",quality:0.95},
       html2canvas:{scale:2,useCORS:true,backgroundColor:"#ffffff"},
       jsPDF:{unit:"mm",format:"a4",orientation:"portrait",compress:true},
-      pagebreak:{mode:["css","legacy"],avoid:[".qa",".part",".ms h5",".ms li",".bands tr",".cover",".instr",".section-h",".stem",".src h4",".chart",".notice",".quote","table.dt tr",".res .big",".restab tr","p"]}};
+      pagebreak:{mode:["css","legacy"],avoid:[".qtop",".qa",".part",".ms h5",".ms li",".bands tr",".cover",".instr",".section-h",".stem",".src h4",".chart",".notice",".quote","table.dt tr",".res .big",".restab tr","p"]}};
     await h2p().set(opt).from(wrap.firstElementChild).toPdf().get("pdf").then(pdf=>{
       const n=pdf.internal.getNumberOfPages(),W=pdf.internal.pageSize.getWidth(),H=pdf.internal.pageSize.getHeight();
       for(let i=1;i<=n;i++){pdf.setPage(i);pdf.setDrawColor(213,219,230);pdf.setLineWidth(0.2);pdf.line(12,H-12,W-12,H-12);
